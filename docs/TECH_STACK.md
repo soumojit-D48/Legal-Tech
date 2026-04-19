@@ -8,7 +8,7 @@
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| Next.js | **16** | App Router, SSE streaming, API routes |
+| Next.js | **latest** | App Router, SSE streaming, API routes |
 | TailwindCSS | **v4** | Utility-first styling |
 | Framer Motion | **11.x** | Animations — risk cards, power meter, stagger effects |
 | Shadcn/ui | **latest** | Pre-built accessible UI components |
@@ -21,7 +21,7 @@
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| Python | **3.12** | Runtime |
+| Python | **3.13** | Runtime |
 | FastAPI | **0.115.x** | Main async API server |
 | Uvicorn | **0.32.x** | ASGI server |
 | Pydantic | **v2** | Request/response validation + LLM JSON output parsing |
@@ -36,7 +36,7 @@
 | OpenRouter API | free tier | LLM gateway — no cost |
 | Llama 3.3 70B Instruct | free model | Main risk analysis, JSON structured output |
 | Gemini 2.0 Flash (exp) | free model | Auto-detection, summary card (fast calls) |
-| LangChain | **0.3.x** | Q&A chat RAG pipeline |
+| LangChain | **0.3.x** | Q&A chat RAG pipeline(For Embedding Model sentence-transformers ) |
 | spaCy | **3.8.x** | Clause segmentation + NER |
 | spaCy model | `en_core_web_sm 3.8.x` | English language model |
 | langdetect | **1.0.9** | Contract language auto-detection |
