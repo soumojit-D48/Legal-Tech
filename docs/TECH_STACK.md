@@ -21,7 +21,7 @@
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| Python | **3.13** | Runtime |
+| Python | **3.11** | Runtime |
 | FastAPI | **0.115.x** | Main async API server |
 | Uvicorn | **0.32.x** | ASGI server |
 | Pydantic | **v2** | Request/response validation + LLM JSON output parsing |

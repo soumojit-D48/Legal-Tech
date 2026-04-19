@@ -1,0 +1,71 @@
+{
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read any file in the repository. Always read a component file before editing it to get its current state. Read the API client (lib/api.ts) before adding new API calls to understand the existing patterns.",
+      "required_before": ["edit_file"]
+    },
+    {
+      "name": "create_file",
+      "description": "Create a new file at the exact path defined in FOLDER_STRUCTURE.md under apps/web/. Never create files outside apps/web/ or packages/types/.",
+      "path_rule": "Must match apps/web/ paths in FOLDER_STRUCTURE.md"
+    },
+    {
+      "name": "edit_file",
+      "description": "Edit an existing file using precise string replacement. Read the file first. Make the smallest targeted change — do not rewrite entire components when a small change will do."
+    },
+    {
+      "name": "run_command",
+      "description": "Execute shell commands for: running the dev server, running TypeScript type checking, running component tests, checking that pages render correctly.",
+      "allowed_commands": [
+        "npm run dev",
+        "npm run build",
+        "npm run type-check",
+        "npm run test",
+        "npx tsc --noEmit",
+        "npm install"
+      ]
+    },
+    {
+      "name": "search_codebase",
+      "description": "Search for component names, hook names, store names, or type definitions. Use before creating a new component to check if it already exists. Use when you need to find where a piece of state is managed."
+    },
+    {
+      "name": "list_directory",
+      "description": "List files in apps/web/ directories to verify structure matches FOLDER_STRUCTURE.md."
+    }
+  ],
+
+  "tool_use_rules": [
+    "Always read a component before editing it.",
+    "Always run npx tsc --noEmit after creating or editing TypeScript files to catch type errors immediately.",
+    "Never add a package to package.json that is not in TECH_STACK.md without flagging it.",
+    "Never use fetch() directly in a component — always use lib/api.ts.",
+    "Never store sensitive data (encryption keys, JWTs) in localStorage or sessionStorage.",
+    "Always check that new components are exported from the correct index file."
+  ],
+
+  "restricted_tools": [
+    {
+      "name": "create_file",
+      "restriction": "Do not create any file outside apps/web/ or packages/types/. The backend (services/, apps/worker/) is the Backend Agent's domain."
+    },
+    {
+      "name": "edit_file",
+      "restriction": "Do not edit any file outside apps/web/ or packages/types/."
+    },
+    {
+      "name": "run_command",
+      "restriction": "Do not run database commands, alembic commands, celery commands, or docker-compose. Those are the Backend Agent's responsibility."
+    }
+  ],
+
+  "priority_reads_on_start": [
+    "PRD.md",
+    "FOLDER_STRUCTURE.md",
+    "TECH_STACK.md",
+    "apps/web/lib/api.ts",
+    "apps/web/types/api.ts",
+    "STEPS_BACKEND.md (Appendix — API Endpoint Reference only)"
+  ]
+}
