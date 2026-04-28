@@ -11,4 +11,5 @@ celery==5.4.0
 redis==5.2.0
 httpx==0.28.0
 python-dotenv==1.0.1
-python-jose[cryptography]==3.3.0svix==1.21.0
+python-jose[cryptography]==3.3.0
+svix==1.21.0
