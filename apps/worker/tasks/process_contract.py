@@ -469,7 +469,44 @@ async def run_pipeline(
         # ------------------------------------------------------------------
         publish_progress(str(contract_id), 80, "Retrieving legal precedents")
         logger.info("Step 11: Running legal precedent retrieval")
-        # Currently skipped
+        try:
+            from services.ai.app.pipelines.precedent_retrieval import (
+                run_precedent_retrieval_for_all_high_clauses, HighRiskClause
+            )
+            from services.api.app.models.precedent_match import PrecedentMatch
+            from services.api.app.repositories.precedent_repo import PrecedentRepository
+            
+            high_clauses = [
+                HighRiskClause(
+                    clause_id=cr["clause_id"],
+                    clause_type=cr.get("risk_category", "unknown"),
+                    clause_text=cr["text"],
+                    risk_category=cr.get("risk_category", "other"),
+                ) for cr in clause_results if cr["risk_level"] == "HIGH"
+            ]
+
+            if high_clauses:
+                precedent_results = run_precedent_retrieval_for_all_high_clauses(high_clauses)
+                
+                async with SessionLocal() as db:
+                    for pm in precedent_results:
+                        match_record = PrecedentMatch(
+                            clause_id=UUID(pm.clause_id),
+                            precedent_summary=pm.precedent_summary,
+                            enforcement_likelihood=pm.enforcement_likelihood,
+                            confidence_score=pm.confidence_score,
+                            cited_cases=[c.model_dump() for c in pm.cited_cases]
+                        )
+                        db.add(match_record)
+                    await db.commit()
+                logger.info("Step 11: Precedent retrieval complete for %d clauses", len(precedent_results))
+            else:
+                logger.info("Step 11: No HIGH-risk clauses, skipping precedent retrieval")
+                
+        except ImportError as e:
+            logger.warning("Precedent retrieval module not available: %s", e)
+        except Exception as e:
+            logger.warning("Precedent retrieval failed: %s", e)
 
         # ------------------------------------------------------------------
         # Step 12: Run summary card generation
