@@ -75,16 +75,16 @@ export default function ScanPage() {
   const sse = useSSE({
     token: sseToken,
     baseUrl: `${API_URL}/api`,
-    onClause: useCallback((result: ClauseResult) => {
+    onClause: useCallback((result: any) => {
       const clause: Clause = {
-        id: `${result.clause_index}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        id: result.clause_id || `${result.position_index}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         contract_id: contractId || "",
-        text: result.clause_text || "",
-        position_index: result.clause_index || 0,
-        risk_level: mapRiskLevel(result.risk_severity),
-        risk_category: mapRiskCategory(result.risk_categories),
-        plain_english: result.explanation || "",
-        worst_case: result.recommendation || null,
+        text: result.text || "",
+        position_index: result.position_index || 0,
+        risk_level: mapRiskLevel(result.risk_level || "LOW"),
+        risk_category: mapRiskCategory(result.risk_categories || []),
+        plain_english: result.plain_english || "",
+        worst_case: result.worst_case_scenario || null,
         financial_exposure: result.financial_exposure || null,
         negotiable: result.negotiable ?? false,
         confidence: result.confidence ?? 0.85,
