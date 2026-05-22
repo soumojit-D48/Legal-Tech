@@ -360,18 +360,28 @@ async def run_pipeline(
         except Exception as e:
             logger.error("Risk classification failed: %s", e)
             for i, text in enumerate(clauses_text):
+                triaged_result = triage_results[i] if triage_results and i < len(triage_results) else None
+                if triaged_result:
+                    risk_level = "HIGH" if triaged_result.result.triage.value == "RED" else \
+                                 "MEDIUM" if triaged_result.result.triage.value == "YELLOW" else "LOW"
+                    categories = triaged_result.result.categories
+                else:
+                    risk_level = "LOW"
+                    categories = []
+
                 clause_result = {
                     "clause_id": str(uuid4()),
                     "position_index": i,
                     "text": text[:500],
-                    "risk_level": "LOW",
-                    "risk_category": "other",
-                    "plain_english": "Analysis unavailable",
-                    "worst_case_scenario": "Review manually",
+                    "risk_level": risk_level,
+                    "risk_category": categories[0] if categories else "other",
+                    "risk_categories": categories,
+                    "plain_english": "Risk detected via rule engine (fallback)" if risk_level != "LOW" else "No risk signals detected (fallback)",
+                    "worst_case_scenario": "Review with legal counsel" if risk_level != "LOW" else "Standard clause",
                     "negotiable": True,
-                    "confidence": 0.0,
+                    "confidence": 0.6,
                     "llm_analysed": False,
-                    "triage": "GREEN",
+                    "triage": triaged_result.result.triage.value if triaged_result else "GREEN",
                 }
                 clause_results.append(clause_result)
                 publish_clause(str(contract_id), clause_result)
@@ -475,6 +485,11 @@ async def run_pipeline(
             "summary_text": "A standard contract requiring review."
         }
         
+        # Default summary fields if generation fails
+        should_sign = "Yes with changes"
+        overall_risk_score = 50
+        negotiating_power = "Moderate"
+        
         try:
             from services.ai.app.pipelines.summary import run_summary, RiskStats
             
@@ -505,6 +520,9 @@ async def run_pipeline(
                 "red_flags": summary.top_3_concerns,
                 "summary_text": summary.one_liner,
             }
+            should_sign = summary.should_you_sign
+            overall_risk_score = summary.overall_risk_score
+            negotiating_power = summary.negotiating_power
             logger.info("Step 12: Summary generation complete")
             
         except Exception as e:
@@ -556,18 +574,26 @@ async def run_pipeline(
                 if existing_analysis:
                     # Update existing record
                     existing_analysis.power_score = power_score
+                    existing_analysis.power_label = power_reasoning
                     existing_analysis.one_liner = summary_data["summary_text"]
                     existing_analysis.leverage_points = summary_data["leverage_points"]
                     existing_analysis.top_concerns = summary_data["red_flags"]
+                    existing_analysis.should_sign = should_sign
+                    existing_analysis.overall_risk_score = overall_risk_score
+                    existing_analysis.negotiating_power = negotiating_power
                 else:
                     # Create new record
                     analysis = AnalysisResult(
                         id=uuid4(),
                         contract_id=contract_id,
                         power_score=power_score,
+                        power_label=power_reasoning,
                         one_liner=summary_data["summary_text"],
                         leverage_points=summary_data["leverage_points"],
-                        top_concerns=summary_data["red_flags"]
+                        top_concerns=summary_data["red_flags"],
+                        should_sign=should_sign,
+                        overall_risk_score=overall_risk_score,
+                        negotiating_power=negotiating_power
                     )
                     db.add(analysis)
             except Exception as e:
