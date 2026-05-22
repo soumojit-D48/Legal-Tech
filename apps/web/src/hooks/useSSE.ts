@@ -8,13 +8,14 @@ import {
 const RECONNECT_DELAY_MS = 2000;
 
 export type ClauseResult = {
-  clause_index: number;
-  clause_text: string;
-  risk_severity: string;
-  safety_rating: string;
+  clause_id?: string;
+  position_index: number;
+  text: string;
+  risk_level: string;
+  triage: string;
   risk_categories: string[];
-  explanation: string;
-  recommendation: string;
+  plain_english: string;
+  worst_case_scenario: string;
   financial_exposure?: string | null;
   negotiable?: boolean;
   confidence?: number;
