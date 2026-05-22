@@ -314,3 +314,24 @@ class OpenRouterClient:
             raise APIError(
                 f"Invalid JSON in response content: {e}. Content: {content[:500]}"
             )
+
+    async def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str = PRIMARY_MODEL,
+        json_mode: bool = False,
+        **kwargs
+    ) -> dict:
+        """
+        Alias for chat() for backwards compatibility with pipeline code.
+        """
+        response_format = {"type": "json_object"} if json_mode else None
+        return await self.chat(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=model,
+            stream=False,
+            response_format=response_format,
+            **kwargs
+        )
