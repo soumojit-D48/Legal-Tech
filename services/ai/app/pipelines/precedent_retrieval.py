@@ -46,7 +46,7 @@ from sentence_transformers import SentenceTransformer
 import psycopg2
 import psycopg2.extras
 
-from app.utils.confidence_scorer import calculate_confidence_score
+from services.ai.app.utils.confidence_scorer import ConfidenceScorer
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +82,10 @@ class HighRiskClause(BaseModel):
 
 class CitedCase(BaseModel):
     """A single legal case cited in the precedent synthesis."""
-    name:    str   # e.g. "Solari Industries, Inc. v. Malady"
-    year:    int   # e.g. 1970
-    outcome: str   # Brief plain-language outcome description
+    name:         str   # e.g. "Solari Industries, Inc. v. Malady"
+    year:         int | None = None  # e.g. 1970
+    jurisdiction: str | None = None  # e.g. "California Supreme Court"
+    outcome:      str   # Brief plain-language outcome description
 
 
 class RetrievedPrecedent(BaseModel):
@@ -192,13 +193,13 @@ def _retrieve_similar_precedents(
 
     query = """
         SELECT
-            case_name,
-            summary,
-            risk_category,
+            context_data->>'case_name' AS case_name,
+            context_data->>'summary' AS summary,
+            context_data->>'clause_type' AS risk_category,
             1 - (embedding <=> %s::vector) AS similarity
         FROM embeddings
         WHERE embedding_type = 'precedent'
-          AND risk_category  = %s
+          AND context_data->>'clause_type' = %s
         ORDER BY embedding <=> %s::vector
         LIMIT %s;
     """
@@ -270,7 +271,7 @@ Respond ONLY with valid JSON — no markdown, no explanation outside JSON.
   "enforcement_likelihood": "<exactly one of: Very Likely Enforced | Likely Enforced | Unlikely Enforced | Rarely Enforced>",
   "confidence_score":       <integer 0-100, your self-rated confidence based on precedent quality>,
   "cited_cases":            [
-    {{"name": "<case name>", "year": <year as integer>, "outcome": "<brief plain-language outcome>"}},
+    {{"name": "<case name>", "year": <year as integer>, "jurisdiction": "<court name>", "outcome": "<brief plain-language outcome>"}},
     ...
   ]
 }}
@@ -284,32 +285,100 @@ Include 1–3 items in cited_cases. Only cite cases from the retrieved precedent
 def _store_precedent_match(clause_id: str, match: PrecedentMatch) -> None:
     """
     Persists the precedent match result to the precedent_matches table.
-    Replace the stub with your actual ORM call.
-
-    Expected schema:
-        precedent_matches (
-            clause_id              TEXT,
-            precedent_summary      TEXT,
-            enforcement_likelihood TEXT,
-            confidence_score       INTEGER,
-            cited_cases            JSONB
-        )
     """
-    # with get_db_session() as session:
-    #     session.add(PrecedentMatchRecord(
-    #         clause_id              = clause_id,
-    #         precedent_summary      = match.precedent_summary,
-    #         enforcement_likelihood = match.enforcement_likelihood,
-    #         confidence_score       = match.confidence_score,
-    #         cited_cases            = [c.model_dump() for c in match.cited_cases],
-    #     ))
-    #     session.commit()
-    logger.info(
-        "[DB STUB] Storing precedent match for clause_id=%s | "
-        "likelihood='%s' confidence=%d cited=%d",
-        clause_id, match.enforcement_likelihood,
-        match.confidence_score, len(match.cited_cases),
+    import uuid
+    import json
+    
+    conn_str = os.environ["DATABASE_URL"]
+    
+    # cited_cases needs to be serialized to JSON
+    # we convert CitedCase models into dictionaries first
+    cited_cases_data = [
+        {
+            "name": c.name,
+            "year": c.year,
+            "jurisdiction": c.jurisdiction,
+            "outcome": c.outcome
+        }
+        for c in match.cited_cases
+    ]
+    
+    delete_query = "DELETE FROM precedent_matches WHERE clause_id = %s;"
+    
+    insert_query = """
+        INSERT INTO precedent_matches (id, clause_id, precedent_summary, enforcement_likelihood, confidence_score, cited_cases, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, NOW());
+    """
+    
+    try:
+        with psycopg2.connect(conn_str) as conn:
+            with conn.cursor() as cur:
+                # Remove any existing match to avoid duplicate row issues (or unique constraint issues)
+                cur.execute(delete_query, (uuid.UUID(clause_id),))
+                
+                # Insert the new match
+                match_id = uuid.uuid4()
+                cur.execute(
+                    insert_query,
+                    (
+                        match_id,
+                        uuid.UUID(clause_id),
+                        match.precedent_summary,
+                        match.enforcement_likelihood,
+                        float(match.confidence_score),
+                        json.dumps(cited_cases_data)
+                    )
+                )
+        logger.info(
+            "Successfully stored precedent match in database for clause_id=%s",
+            clause_id
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to persist precedent match to database for clause_id=%s: %s",
+            clause_id, e
+        )
+
+
+# ---------------------------------------------------------------------------
+# LLM Call Helpers
+# ---------------------------------------------------------------------------
+
+async def _call_llm_async(system_prompt: str, user_prompt: str, model: str) -> str:
+    from services.ai.app.models.openrouter_client import OpenRouterClient
+    client = OpenRouterClient()
+    raw_response = await client.complete(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        model=model,
+        json_mode=True,
     )
+    content = raw_response.get("choices", [{}])[0].get("message", {}).get("content", "")
+    return content or ""
+
+
+def _call_llm(system_prompt: str, user_prompt: str, model: str) -> str:
+    """
+    Call the model via OpenRouterClient.
+    """
+    import asyncio
+    import concurrent.futures
+
+    try:
+        asyncio.get_running_loop()
+        has_loop = True
+    except RuntimeError:
+        has_loop = False
+
+    if has_loop:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(
+                asyncio.run,
+                _call_llm_async(system_prompt, user_prompt, model),
+            )
+            return future.result()
+    else:
+        return asyncio.run(_call_llm_async(system_prompt, user_prompt, model))
 
 
 # ---------------------------------------------------------------------------
@@ -364,25 +433,22 @@ def run_precedent_retrieval(
             enforcement_likelihood = "Unlikely Enforced",
             confidence_score       = 0,
             cited_cases            = [CitedCase(
-                name    = "No case found",
-                year    = 0,
-                outcome = "No precedent data available for this clause type.",
+                name         = "No case found",
+                year         = 0,
+                jurisdiction = "N/A",
+                outcome      = "No precedent data available for this clause type.",
             )],
         )
         _store_precedent_match(clause.clause_id, empty_match)
         return empty_match
 
     # Step 3: Call AI model for synthesis
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     prompt = _build_precedent_prompt(clause, precedents)
+    system_prompt = "You are a senior legal analyst specialising in contract enforcement. Respond ONLY with a valid JSON object."
+    model_to_use = os.getenv("PRIMARY_MODEL", "meta-llama/llama-3.3-70b-instruct")
 
     try:
-        response = client.messages.create(
-            model      = primary_model,
-            max_tokens = 900,
-            messages   = [{"role": "user", "content": prompt}],
-        )
-        raw_text = response.content[0].text.strip()
+        raw_text = _call_llm(system_prompt=system_prompt, user_prompt=prompt, model=model_to_use).strip()
 
         # Step 4: Parse AI response
         raw_json = json.loads(raw_text)
@@ -399,8 +465,8 @@ def run_precedent_retrieval(
         # Step 5: Calculate blended confidence score
         # Formula: avg(retrieval_similarities) × llm_confidence
         retrieval_similarities = [p.similarity for p in precedents]
-        blended_confidence     = calculate_confidence_score(
-            retrieval_similarities, llm_confidence
+        blended_confidence     = ConfidenceScorer.compute(
+            sum(retrieval_similarities)/len(retrieval_similarities) if retrieval_similarities else 0, llm_confidence
         )
 
         # Overwrite the model's raw self-rating with the blended score
