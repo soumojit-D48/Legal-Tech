@@ -44,8 +44,8 @@ async def _fetch_clause_data(clause_id: UUID) -> Dict[str, Any] | None:
             "clause_id": str(clause.id),
             "clause_text": clause.text,
             "risk_category": clause.risk_category or "other",
-            "contract_type": contract.contract_type if contract else "Unknown",
-            "user_role": "the user",  # TODO: get from user/contract data
+            "contract_type": (contract.contract_type if contract else None) or "Unknown",
+            "user_role": "Client",
         }
 
 
@@ -80,7 +80,7 @@ async def _save_counter_offer(clause_id: UUID, result: Dict[str, Any]) -> None:
         logger.info("Counter-offer stored for clause %s", clause_id)
 
 
-@app.task(bind=True, max_retries=3, default_retry_delay=60)
+@app.task(name="generate_counter_offer", bind=True, max_retries=3, default_retry_delay=60)
 def generate_counter_offer_task(self, clause_id_str: str) -> Dict[str, Any]:
     """
     Celery task to generate a counter-offer for a HIGH-risk clause.
@@ -115,7 +115,7 @@ def generate_counter_offer_task(self, clause_id_str: str) -> Dict[str, Any]:
         )
 
         # Build request object expected by the pipeline
-        from services.ai.app.pipelines.counter_offer import CounterOfferRequest
+        from services.ai.schemas.counter_offer import CounterOfferRequest
 
         request = CounterOfferRequest(
             clause_id=clause_data["clause_id"],
