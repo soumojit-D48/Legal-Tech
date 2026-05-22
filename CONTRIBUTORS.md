@@ -7,7 +7,8 @@ Thanks to everyone who contributed to this project.
 ## Team Members
 
 - Soumojit Das — https://github.com/soumojit-D48
-- Team Member 2 — https://github.com/username2  
-- Team Member 3 — https://github.com/username3  
-
+- Anushka Sarkar — https://github.com/anushka583 
+- Subhankar Nath-git — https://github.com/subhankar235
+- Vikash Gupta — https://github.com/Vortex-16
+- Mehul Bhowmick — https://github.com/Pseudo-spy
 ---

@@ -1,0 +1,71 @@
+{
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read any file in the repository. Use before editing to ensure you have the current content. Always read a file before making changes to it.",
+      "required_before": ["edit_file", "create_file"]
+    },
+    {
+      "name": "create_file",
+      "description": "Create a new file at the exact path defined in FOLDER_STRUCTURE.md. Never create files in paths not defined in FOLDER_STRUCTURE.md without flagging it first.",
+      "path_rule": "Must match FOLDER_STRUCTURE.md"
+    },
+    {
+      "name": "edit_file",
+      "description": "Edit an existing file using precise string replacement. Always read the file first. Always make the smallest change needed — do not rewrite entire files when a targeted edit will do."
+    },
+    {
+      "name": "run_command",
+      "description": "Execute shell commands for: running tests, starting services, running Alembic migrations, running seeding scripts, verifying curl responses, checking Redis keys, checking database records. Use this to run every verification step in STEPS_BACKEND.md.",
+      "allowed_commands": [
+        "pytest",
+        "alembic",
+        "celery",
+        "uvicorn",
+        "curl",
+        "python",
+        "pip",
+        "redis-cli",
+        "psql",
+        "docker-compose",
+        "docker"
+      ]
+    },
+    {
+      "name": "search_codebase",
+      "description": "Search the codebase for a function name, class name, variable, or string. Use before creating a new function to check if it already exists. Use when tracing how a piece of data flows through the system."
+    },
+    {
+      "name": "list_directory",
+      "description": "List files in a directory. Use to verify the directory structure matches FOLDER_STRUCTURE.md before and after creating files."
+    }
+  ],
+
+  "tool_use_rules": [
+    "Always read a file before editing it — never edit from memory.",
+    "Always run verification commands after completing each STEPS_BACKEND.md step.",
+    "Never run destructive database commands (DROP TABLE, DELETE without WHERE) without explicit confirmation.",
+    "When running curl for verification, always include the -v flag to see response headers.",
+    "When a test fails, read the full error output before making any changes.",
+    "Never install packages not in requirements.txt without flagging it first."
+  ],
+
+  "restricted_tools": [
+    {
+      "name": "create_file",
+      "restriction": "Do not create any file under apps/web/ — that is the Frontend Agent's domain."
+    },
+    {
+      "name": "edit_file",
+      "restriction": "Do not edit any file under apps/web/ — that is the Frontend Agent's domain."
+    }
+  ],
+
+  "priority_reads_on_start": [
+    "PRD.md",
+    "STEPS_BACKEND.md",
+    "TECH_STACK.md",
+    "FOLDER_STRUCTURE.md",
+    ".env.example"
+  ]
+}
