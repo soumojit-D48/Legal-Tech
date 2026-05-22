@@ -28,7 +28,8 @@ export function CounterOfferPanel({ clause }: CounterOfferPanelProps) {
       const interval = setInterval(async () => {
         try {
           const result = await getCounterOffer(clause.id);
-          if (result) {
+          // Check if result has the expected data (not just a status="processing" placeholder)
+          if (result && "aggressive_clause" in result && result.aggressive_clause) {
             setCounterOffer(result);
             setStatus("ready");
             clearInterval(interval);
