@@ -88,7 +88,16 @@ async def generate_counter_offer(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid clause ID"
         )
 
+    # Attempt to fetch user by Clerk ID; if that fails, fall back to internal UUID lookup
     user = await user_repo.get_user_by_clerk_id(db, current_user)
+    if not user:
+        # current_user might already be an internal UUID string
+        try:
+            from uuid import UUID as _UUID
+            internal_id = _UUID(current_user)
+            user = await user_repo.get_user_by_id(db, internal_id)
+        except Exception:
+            user = None
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -115,9 +124,12 @@ async def generate_counter_offer(
             status_code=200,
             content={
                 "clause_id": str(existing.clause_id),
-                "aggressive": existing.aggressive_version,
-                "balanced": existing.balanced_version,
-                "conservative": existing.conservative_version,
+                "aggressive_clause": existing.aggressive_version,
+                "explanation_aggressive": "This aggressive version provides maximum protection by significantly limiting the restriction or maximizing the obligation in your favor.",
+                "balanced_clause": existing.balanced_version,
+                "explanation_balanced": "This compromise version balances key interests of both parties to ensure mutual fairness and a higher likelihood of acceptance.",
+                "conservative_clause": existing.conservative_version,
+                "explanation_conservative": "This conservative version introduces minor changes to slightly improve your position while maintaining standard terms.",
                 "negotiation_email": existing.negotiation_email,
             },
         )
@@ -229,9 +241,12 @@ async def get_counter_offer(
         status_code=200,
         content={
             "clause_id": str(counter_offer.clause_id),
-            "aggressive": counter_offer.aggressive_version,
-            "balanced": counter_offer.balanced_version,
-            "conservative": counter_offer.conservative_version,
+            "aggressive_clause": counter_offer.aggressive_version,
+            "explanation_aggressive": "This aggressive version provides maximum protection by significantly limiting the restriction or maximizing the obligation in your favor.",
+            "balanced_clause": counter_offer.balanced_version,
+            "explanation_balanced": "This compromise version balances key interests of both parties to ensure mutual fairness and a higher likelihood of acceptance.",
+            "conservative_clause": counter_offer.conservative_version,
+            "explanation_conservative": "This conservative version introduces minor changes to slightly improve your position while maintaining standard terms.",
             "negotiation_email": counter_offer.negotiation_email,
         },
     )

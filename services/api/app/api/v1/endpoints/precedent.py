@@ -111,21 +111,26 @@ async def get_precedent(
     precedent = result.scalars().first()
 
     if not precedent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No precedent match found for this clause (HIGH-risk clauses only)",
+        # Return an empty but successful response for clauses without a precedent match
+        return JSONResponse(
+            status_code=200,
+            content={
+                "clause_id": clause_id,
+                "status": "ready",
+                "precedent_summary": "",
+                "enforcement_likelihood": "",
+                "confidence_score": 0,
+                "cited_cases": [],
+            },
         )
 
     return JSONResponse(
         status_code=200,
         content={
             "clause_id": str(precedent.clause_id),
-            "case_name": precedent.case_name,
-            "year": precedent.case_year,
-            "jurisdiction": precedent.jurisdiction,
-            "outcome": precedent.outcome,
-            "precedent_summary": precedent.enforcement_likelihood,
+            "precedent_summary": precedent.precedent_summary,
             "enforcement_likelihood": precedent.enforcement_likelihood,
             "confidence_score": precedent.confidence_score,
+            "cited_cases": precedent.cited_cases,
         },
     )
