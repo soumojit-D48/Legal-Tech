@@ -34,9 +34,15 @@ from sqlalchemy.orm import Session
 from services.api.app.models.counter_offer import CounterOffer
 from services.api.app.models.embedding import Embedding
 from services.api.app.db.session import engine
-from app.pipelines.precedent_retrieval import _get_embedding_model
+from services.ai.app.pipelines.precedent_retrieval import _get_embedding_model
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
+from services.ai.schemas.counter_offer import (
+    CounterOfferRequest,
+    CounterOfferResult,
+    CounterOfferRecord,
+    CounterOfferVersion
+)
 
 log = logging.getLogger(__name__)
 
@@ -85,10 +91,10 @@ def retrieve_favorable_clause(
     result = session.execute(
         text(
             """
-            SELECT id, content, clause_type, source_id, metadata
+            SELECT id, text AS content, context_data->>'clause_type' AS clause_type, context_data
             FROM embeddings
             WHERE embedding_type = 'favorable_clause'
-              AND clause_type = :clause_type
+              AND context_data->>'clause_type' = :clause_type
             ORDER BY embedding <=> CAST(:embedding AS vector)
             LIMIT :top_k
             """
@@ -110,7 +116,7 @@ def retrieve_favorable_clause(
         result = session.execute(
             text(
                 """
-                SELECT id, content, clause_type, source_id, metadata
+                SELECT id, text AS content, context_data->>'clause_type' AS clause_type, context_data
                 FROM embeddings
                 WHERE embedding_type = 'favorable_clause'
                 ORDER BY embedding <=> CAST(:embedding AS vector)
@@ -129,8 +135,8 @@ def retrieve_favorable_clause(
     emb.id = row.id
     emb.content = row.content
     emb.clause_type = row.clause_type
-    emb.source_id = row.source_id
-    emb.metadata_ = row.metadata
+    emb.source_id = None
+    emb.metadata_ = row.context_data
     return emb
 
 
@@ -138,12 +144,7 @@ def retrieve_favorable_clause(
 # LLM call
 # ---------------------------------------------------------------------------
 
-def _load_prompt_template() -> str:
-    if not COUNTER_OFFER_PROMPT_PATH.exists():
-        raise FileNotFoundError(
-            f"Counter-offer prompt not found: {COUNTER_OFFER_PROMPT_PATH}"
-        )
-    return COUNTER_OFFER_PROMPT_PATH.read_text(encoding="utf-8")
+from ..prompts.prompt_loader import load_prompt
 
 
 def _build_prompt(
@@ -152,55 +153,53 @@ def _build_prompt(
     contract_type: str,
     user_role: str,
     risk_category: str,
-) -> str:
-    template = _load_prompt_template()
-    return template.format(
-        original_clause=original_clause,
-        favorable_reference=favorable_reference,
-        contract_type=contract_type,
-        user_role=user_role,
-        risk_category=risk_category,
-    )
-
-
-def _call_llm(prompt: str) -> str:
-    """
-    Call the PRIMARY_MODEL via the Anthropic Messages API.
-    Returns the raw text content of the first message block.
-    """
-    if not ANTHROPIC_API_KEY:
-        raise EnvironmentError("ANTHROPIC_API_KEY is not set")
-
-    payload = {
-        "model": PRIMARY_MODEL,
-        "max_tokens": MAX_TOKENS,
-        "messages": [{"role": "user", "content": prompt}],
-        "system": (
-            "You are an expert contract attorney generating counter-offers. "
-            "Respond only with valid JSON as instructed. "
-            "Do not include markdown code fences or any text outside the JSON object."
-        ),
+) -> tuple[str, str]:
+    values = {
+        "original_clause": original_clause,
+        "favorable_reference": favorable_reference,
+        "contract_type": contract_type,
+        "user_role": user_role,
+        "risk_category": risk_category,
     }
+    return load_prompt("counter_offer", values)
 
-    response = httpx.post(
-        ANTHROPIC_MESSAGES_URL,
-        headers={
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": ANTHROPIC_API_VERSION,
-            "content-type": "application/json",
-        },
-        json=payload,
-        timeout=60.0,
+
+async def _call_llm_async(system_prompt: str, user_prompt: str) -> str:
+    from services.ai.app.models.openrouter_client import OpenRouterClient
+    client = OpenRouterClient()
+    raw_response = await client.complete(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        model=PRIMARY_MODEL,
+        json_mode=True,
     )
-    response.raise_for_status()
-    data = response.json()
+    content = raw_response["choices"][0]["message"].get("content", "")
+    return content
 
-    # Extract text from content blocks
-    content_blocks = data.get("content", [])
-    text_parts = [block["text"] for block in content_blocks if block.get("type") == "text"]
-    if not text_parts:
-        raise ValueError(f"No text content in LLM response: {data}")
-    return "".join(text_parts)
+
+def _call_llm(system_prompt: str, user_prompt: str) -> str:
+    """
+    Call the PRIMARY_MODEL via the OpenRouter API.
+    Returns the raw text content of the response.
+    """
+    import asyncio
+    import concurrent.futures
+
+    try:
+        asyncio.get_running_loop()
+        has_loop = True
+    except RuntimeError:
+        has_loop = False
+
+    if has_loop:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(
+                asyncio.run,
+                _call_llm_async(system_prompt, user_prompt),
+            )
+            return future.result()
+    else:
+        return asyncio.run(_call_llm_async(system_prompt, user_prompt))
 
 
 # ---------------------------------------------------------------------------
@@ -266,18 +265,10 @@ def _persist_counter_offer(
     record = CounterOffer(
         id=uuid.uuid4(),
         clause_id=request.clause_id,
-        contract_type=request.contract_type,
-        user_role=request.user_role,
-        risk_category=request.risk_category,
-        favorable_reference_id=favorable_ref_id,
-        aggressive_clause=result.aggressive.clause,
-        aggressive_explanation=result.aggressive.explanation,
-        balanced_clause=result.balanced.clause,
-        balanced_explanation=result.balanced.explanation,
-        conservative_clause=result.conservative.clause,
-        conservative_explanation=result.conservative.explanation,
+        aggressive_version=result.aggressive.clause,
+        balanced_version=result.balanced.clause,
+        conservative_version=result.conservative.clause,
         negotiation_email=result.negotiation_email,
-        raw_response=raw_response,
     )
     session.add(record)
     session.flush()  # Assigns DB-generated fields without full commit
@@ -341,7 +332,7 @@ def generate_counter_offer(request: CounterOfferRequest) -> CounterOfferRecord:
             favorable_ref_id = None
 
         # Step 3: Build and send prompt
-        prompt = _build_prompt(
+        system_prompt, user_prompt = _build_prompt(
             original_clause=request.clause_text,
             favorable_reference=favorable_text,
             contract_type=request.contract_type,
@@ -349,7 +340,7 @@ def generate_counter_offer(request: CounterOfferRequest) -> CounterOfferRecord:
             risk_category=request.risk_category,
         )
         log.debug("Calling PRIMARY_MODEL=%s…", PRIMARY_MODEL)
-        raw_response = _call_llm(prompt)
+        raw_response = _call_llm(system_prompt, user_prompt)
         log.debug("LLM response received (%d chars)", len(raw_response))
 
         # Step 4: Parse
