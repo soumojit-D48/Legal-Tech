@@ -101,6 +101,19 @@ async def generate_counter_offer(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # DEBUGGING: Try fetching clause alone
+    debug_clause = await db.execute(select(Clause).where(Clause.id == clause_uuid))
+    c_alone = debug_clause.scalars().first()
+    print(f"DEBUG POST: Clause alone found? {c_alone is not None}")
+    if c_alone:
+        print(f"DEBUG POST: Clause contract_id: {c_alone.contract_id}")
+        
+        debug_contract = await db.execute(select(Contract).where(Contract.id == c_alone.contract_id))
+        con_alone = debug_contract.scalars().first()
+        if con_alone:
+            print(f"DEBUG POST: Contract user_id: {con_alone.user_id}, expected user.id: {user.id}")
+            print(f"DEBUG POST: Match? {con_alone.user_id == user.id}")
+
     result = await db.execute(
         select(Clause)
         .join(Contract, Clause.contract_id == Contract.id)
