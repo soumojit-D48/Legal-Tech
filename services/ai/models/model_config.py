@@ -2,6 +2,6 @@
 Model configuration constants for OpenRouter.
 """
 
-PRIMARY_MODEL = "meta-llama/llama-3.3-70b-instruct"
+PRIMARY_MODEL = "llama-3.3-70b-versatile"
 
-FAST_MODEL = "anthropic/claude-3-haiku"
+FAST_MODEL = "llama-3.1-8b-instant"

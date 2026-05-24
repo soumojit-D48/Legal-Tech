@@ -18,8 +18,8 @@ from .streaming import stream_sse
 
 logger = logging.getLogger(__name__)
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_API_KEY = os.getenv("GROQ_API_KEY", "")
+OPENROUTER_BASE_URL = "https://api.groq.com/openai/v1"
 
 MAX_RETRIES = 3
 INITIAL_DELAY = 1.0
@@ -65,7 +65,7 @@ class OpenRouterClient:
         self.base_url = base_url or OPENROUTER_BASE_URL
 
         if not self.api_key:
-            logger.warning("OpenRouter API key not set")
+            logger.warning("Groq API key not set")
 
         self._client = httpx.AsyncClient(
             headers={
@@ -206,7 +206,7 @@ class OpenRouterClient:
             Streaming: Async generator yielding parsed chunks.
         """
         if not self.api_key:
-            raise AuthenticationError("OpenRouter API key is required. Set OPENROUTER_API_KEY env var.")
+            raise AuthenticationError("Groq API key is required. Set GROQ_API_KEY env var.")
 
         messages = [
             {"role": "system", "content": system_prompt},
