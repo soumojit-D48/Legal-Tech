@@ -9,6 +9,8 @@ export interface Contract {
   file_type: string;
   detected_language: string;
   created_at: string;
+  overall_risk_score?: number | null;
+  latest_job_id?: string | null;
 }
 
 export interface ContractsResponse {

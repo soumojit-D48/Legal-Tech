@@ -19,6 +19,7 @@ export function useApiClient() {
     try {
       const token = await getToken();
       const response = await fetch(`${API_URL}${endpoint}`, {
+        cache: 'no-store',
         ...options,
         headers: {
           "Content-Type": "application/json",

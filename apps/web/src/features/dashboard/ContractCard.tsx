@@ -27,7 +27,7 @@ export function ContractCard({ contract, index }: ContractCardProps) {
       transition={{ delay: index * 0.05 }}
     >
       <Link
-        href={isComplete ? `/scan/${contract.id}` : `/upload`}
+        href={isComplete && contract.latest_job_id ? `/scan/${contract.latest_job_id}` : `/upload`}
         className="group block relative rounded-2xl border border-white/5 bg-white/[0.02] p-5 transition-all hover:bg-white/[0.05] hover:border-white/10"
       >
         <div className="flex items-start justify-between gap-4">

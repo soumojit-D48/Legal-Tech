@@ -40,7 +40,7 @@ async def get_contracts(
     return {
         "contracts": [
             {
-                "contract_id": str(c.id),
+                "id": str(c.id),
                 "original_filename": c.original_filename,
                 "contract_type": c.contract_type,
                 "detected_language": c.detected_language,
@@ -48,6 +48,7 @@ async def get_contracts(
                 "overall_risk_score": c.analysis_result.overall_risk_score
                 if c.analysis_result
                 else None,
+                "latest_job_id": str(c.scan_jobs[0].id) if getattr(c, "scan_jobs", None) and len(c.scan_jobs) > 0 else None,
             }
             for c in contracts
         ]

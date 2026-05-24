@@ -59,4 +59,5 @@ export interface DashboardContract {
   should_sign: ShouldSign;
   created_at: string;
   status: "processing" | "complete";
+  latest_job_id?: string | null;
 }

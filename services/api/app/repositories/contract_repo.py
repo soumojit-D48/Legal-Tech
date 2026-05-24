@@ -51,16 +51,17 @@ async def get_all_contracts_by_user_id(
     limit: int = 100,
     offset: int = 0,
 ) -> List[Contract]:
-    """Get all contracts for a user with analysis results."""
+    """Get all contracts for a user with analysis results and scan jobs."""
     result = await session.execute(
         select(Contract)
         .options(joinedload(Contract.analysis_result))
+        .options(joinedload(Contract.scan_jobs))
         .where(Contract.user_id == user_id)
         .limit(limit)
         .offset(offset)
         .order_by(Contract.created_at.desc())
     )
-    return result.scalars().all()
+    return result.unique().scalars().all()
 
 
 async def update_contract(
