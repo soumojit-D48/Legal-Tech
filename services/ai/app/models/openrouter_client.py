@@ -36,10 +36,10 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_BASE_URL = "https://api.groq.com/openai/v1"
 CHAT_ENDPOINT = f"{OPENROUTER_BASE_URL}/chat/completions"
 
-_API_KEY_ENV = "OPENROUTER_API_KEY"
+_API_KEY_ENV = "GROQ_API_KEY"
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ def _get_api_key() -> str:
     key = os.getenv(_API_KEY_ENV, "").strip()
     if not key:
         raise AuthenticationError(
-            f"OpenRouter API key not found. "
+            f"Groq API key not found. "
             f"Set the {_API_KEY_ENV!r} environment variable."
         )
     return key
@@ -195,7 +195,7 @@ class OpenRouterClient:
                 if response.status_code in (401, 403):
                     raise AuthenticationError(
                         f"Authentication failed (HTTP {response.status_code}). "
-                        "Check your OPENROUTER_API_KEY."
+                        "Check your GROQ_API_KEY."
                     )
 
                 # Retryable errors
